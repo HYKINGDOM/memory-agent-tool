@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from memory_agent_tool.config import AppSettings, TrustConfig
+from memory_agent_tool.config import AppSettings, DurabilityConfig, TrustConfig
 from memory_agent_tool.database import Database
 from memory_agent_tool.logging import get_logger
 from memory_agent_tool.models import (
@@ -22,35 +22,20 @@ logger = get_logger("memory_service")
 
 
 class ProjectMemoryService:
-    def __init__(self, db: Database, settings: AppSettings, conflicts, trust: TrustConfig | None = None):
+    def __init__(self, db: Database, settings: AppSettings, conflicts, trust: TrustConfig | None = None, durability: DurabilityConfig | None = None):
         self.db = db
         self.settings = settings
         self.conflicts = conflicts
         self.trust = trust or settings.trust
+        self.durability = durability or settings.durability
 
     def classify_durability(self, content: str, memory_type: str) -> DurabilityLevel:
         text = normalize_text(content)
-        if len(text) > 500 or "traceback" in text or "debug" in text or "stack trace" in text:
+        if len(text) > self.durability.durable_content_length_threshold or any(marker in text for marker in self.durability.transient_markers):
             return DurabilityLevel.TRANSIENT
         if memory_type in {"procedure", "workflow"}:
             return DurabilityLevel.SKILL_CANDIDATE
-        durable_markers = (
-            "project",
-            "repository",
-            "always",
-            "use ",
-            "run ",
-            "avoid",
-            "build",
-            "test",
-            "backend",
-            "framework",
-            "command",
-            "convention",
-            "procedure",
-            "fixed",
-        )
-        if any(marker in text for marker in durable_markers):
+        if any(marker in text for marker in self.durability.durable_markers):
             return DurabilityLevel.PROJECT_DURABLE
         return DurabilityLevel.SESSION_RELEVANT
 

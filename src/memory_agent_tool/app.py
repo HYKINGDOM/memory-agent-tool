@@ -5,18 +5,28 @@ from fastapi import FastAPI, HTTPException
 from memory_agent_tool.config import AppSettings
 from memory_agent_tool.e2e import run_local_e2e
 from memory_agent_tool.models import (
+    AppendEventResult,
+    ConsolidationResult,
+    ContextBundle,
     FeedbackRequest,
     HealthResponse,
+    IngestedMemory,
     MemoryIngestRequest,
     MemoryRecallRequest,
     ProjectAliasRequest,
     ProjectContext,
+    ProviderStatusModel,
+    RebuildResult,
+    ResolvedProject,
     SessionEvent,
     SessionEndResponse,
     SessionStartRequest,
     SessionStartResponse,
     SkillFeedbackRequest,
+    SkillFeedbackResult,
     SkillPromotionRequest,
+    SkillSummary,
+    StaleReviewResult,
     StatusReport,
 )
 from memory_agent_tool.services import AppContainer
@@ -32,21 +42,20 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     def health() -> HealthResponse:
         return container.reporter.health()
 
-    @app.post("/projects/resolve")
-    def resolve_project(project: ProjectContext):
+    @app.post("/projects/resolve", response_model=ResolvedProject)
+    def resolve_project(project: ProjectContext) -> ResolvedProject:
         return container.projects.ensure_project(project)
 
     @app.post("/sessions/start", response_model=SessionStartResponse)
     def start_session(request: SessionStartRequest) -> SessionStartResponse:
         return container.archive.start_session(request)
 
-    @app.post("/sessions/{session_id}/events")
-    def append_event(session_id: str, payload: dict):
+    @app.post("/sessions/{session_id}/events", response_model=AppendEventResult)
+    def append_event(session_id: str, payload: dict) -> AppendEventResult:
         event = SessionEvent.model_validate(payload["event"])
         project = ProjectContext.model_validate(payload["project"])
         try:
-            result = container.archive.append_event(session_id, event, project)
-            return result.model_dump()
+            return container.archive.append_event(session_id, event, project)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -57,8 +66,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    @app.post("/memory/ingest")
-    def ingest_memory(request: MemoryIngestRequest):
+    @app.post("/memory/ingest", response_model=IngestedMemory)
+    def ingest_memory(request: MemoryIngestRequest) -> IngestedMemory:
         resolved = container.projects.ensure_project(request.project)
         loaded_rules = container.rules_loader.load(request.project)
         ingested = container.memory.ingest(
@@ -74,19 +83,19 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         )
         return ingested
 
-    @app.post("/memory/recall")
-    def recall_memory(request: MemoryRecallRequest):
+    @app.post("/memory/recall", response_model=ContextBundle)
+    def recall_memory(request: MemoryRecallRequest) -> ContextBundle:
         return container.retrieval.recall(request)
 
-    @app.post("/memory/feedback")
-    def apply_feedback(request: FeedbackRequest):
+    @app.post("/memory/feedback", response_model=IngestedMemory)
+    def apply_feedback(request: FeedbackRequest) -> IngestedMemory:
         try:
             return container.conflicts.apply_feedback(request)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    @app.post("/skills/promote")
-    def promote_skill(request: SkillPromotionRequest):
+    @app.post("/skills/promote", response_model=SkillSummary)
+    def promote_skill(request: SkillPromotionRequest) -> SkillSummary:
         resolved = container.projects.ensure_project(request.project)
         try:
             if request.memory_id is not None:
@@ -97,19 +106,19 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @app.post("/skills/{skill_id}/feedback")
-    def record_skill_feedback(skill_id: int, request: SkillFeedbackRequest):
+    @app.post("/skills/{skill_id}/feedback", response_model=SkillFeedbackResult)
+    def record_skill_feedback(skill_id: int, request: SkillFeedbackRequest) -> SkillFeedbackResult:
         try:
             return container.skills.record_skill_feedback(
                 skill_id,
                 helpful=request.helpful,
                 accepted=request.accepted,
-            ).model_dump()
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    @app.post("/skills/{skill_id}/refresh")
-    def refresh_skill(skill_id: int):
+    @app.post("/skills/{skill_id}/refresh", response_model=SkillSummary)
+    def refresh_skill(skill_id: int) -> SkillSummary:
         try:
             return container.skills.refresh_skill_from_sources(skill_id)
         except (KeyError, ValueError) as exc:
@@ -131,19 +140,13 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     def configure_providers(payload: dict):
         return container.providers.configure(payload)
 
-    @app.post("/providers/{provider_name}/reload")
-    def reload_provider(provider_name: str):
-        status = container.providers.reload(
+    @app.post("/providers/{provider_name}/reload", response_model=ProviderStatusModel)
+    def reload_provider(provider_name: str) -> ProviderStatusModel:
+        return container.providers.reload(
             provider_name,
             root_dir=str(resolved_settings.root_dir),
             db_path=str(resolved_settings.db_path),
         )
-        return {
-            "provider_name": status.provider_name,
-            "status": status.status,
-            "capabilities": status.capabilities,
-            "last_error": status.last_error,
-        }
 
     @app.get("/sessions/{session_id}")
     def get_session(session_id: str):
@@ -202,17 +205,17 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         )
         return {"items": [dict(row) for row in rows]}
 
-    @app.post("/summaries/rebuild")
-    def rebuild_summaries():
-        return container.maintenance.rebuild_session_summaries().model_dump()
+    @app.post("/summaries/rebuild", response_model=RebuildResult)
+    def rebuild_summaries() -> RebuildResult:
+        return container.maintenance.rebuild_session_summaries()
 
-    @app.post("/maintenance/review-stale/{project_key}")
-    def review_stale(project_key: str):
-        return container.maintenance.review_stale_memories(project_key).model_dump()
+    @app.post("/maintenance/review-stale/{project_key}", response_model=StaleReviewResult)
+    def review_stale(project_key: str) -> StaleReviewResult:
+        return container.maintenance.review_stale_memories(project_key)
 
-    @app.post("/maintenance/consolidate/{project_key}")
-    def consolidate_project_memory(project_key: str):
-        return container.maintenance.consolidate_project_memory(project_key).model_dump()
+    @app.post("/maintenance/consolidate/{project_key}", response_model=ConsolidationResult)
+    def consolidate_project_memory(project_key: str) -> ConsolidationResult:
+        return container.maintenance.consolidate_project_memory(project_key)
 
     @app.post("/doctor/check", response_model=StatusReport)
     def doctor_check() -> StatusReport:

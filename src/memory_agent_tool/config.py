@@ -65,6 +65,46 @@ class ScoringConfig:
         )
 
 
+_DEFAULT_DURABLE_MARKERS = (
+    "project",
+    "repository",
+    "always",
+    "use ",
+    "run ",
+    "avoid",
+    "build",
+    "test",
+    "backend",
+    "framework",
+    "command",
+    "convention",
+    "procedure",
+    "fixed",
+)
+
+_DEFAULT_TRANSIENT_MARKERS = (
+    "traceback",
+    "debug",
+    "stack trace",
+)
+
+
+@dataclass(slots=True)
+class DurabilityConfig:
+    durable_markers: tuple[str, ...] = _DEFAULT_DURABLE_MARKERS
+    transient_markers: tuple[str, ...] = _DEFAULT_TRANSIENT_MARKERS
+    durable_content_length_threshold: int = 500
+
+    @classmethod
+    def from_env(cls) -> "DurabilityConfig":
+        durable_raw = os.environ.get("MEMORY_DURABLE_MARKERS", "")
+        transient_raw = os.environ.get("MEMORY_TRANSIENT_MARKERS", "")
+        return cls(
+            durable_markers=tuple(m.strip() for m in durable_raw.split(",") if m.strip()) or _DEFAULT_DURABLE_MARKERS,
+            transient_markers=tuple(m.strip() for m in transient_raw.split(",") if m.strip()) or _DEFAULT_TRANSIENT_MARKERS,
+        )
+
+
 @dataclass(slots=True)
 class AppSettings:
     root_dir: Path
@@ -77,6 +117,7 @@ class AppSettings:
     pinned_memory_char_budget: int = 2400
     trust: TrustConfig = field(default_factory=TrustConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
+    durability: DurabilityConfig = field(default_factory=DurabilityConfig)
     log_level: str = "INFO"
     log_json: bool = False
 
@@ -99,6 +140,7 @@ class AppSettings:
             port=int(os.environ.get("MEMORY_AGENT_TOOL_PORT", "8765")),
             trust=TrustConfig.from_env(),
             scoring=ScoringConfig.from_env(),
+            durability=DurabilityConfig.from_env(),
             log_level=os.environ.get("MEMORY_AGENT_TOOL_LOG_LEVEL", "INFO"),
             log_json=os.environ.get("MEMORY_AGENT_TOOL_LOG_JSON", "").lower() in {"1", "true", "yes"},
         )
