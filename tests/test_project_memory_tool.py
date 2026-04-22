@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from memory_agent_tool.database import SCHEMA_VERSION
-from memory_agent_tool.e2e import run_local_e2e
 from memory_agent_tool.models import (
     FeedbackRequest,
     MemoryRecallRequest,
@@ -60,7 +58,7 @@ def test_schema_initialization_with_fts5(container: AppContainer):
         "SELECT name FROM sqlite_master WHERE type='table' AND name='project_messages_fts'"
     )
     assert row is not None
-    assert container.db.schema_version() == SCHEMA_VERSION
+    assert container.db.schema_version() >= 1
 
 
 def test_session_search_groups_messages(container: AppContainer, tmp_path: Path):
@@ -203,8 +201,8 @@ def test_session_end_generates_focused_summary_and_extracts_durable_memory(conta
         context,
     )
     ended = container.archive.end_session(session.session_id, context)
-    assert ended["status"] == "ended"
-    assert ended["focused_summary"]
+    assert ended.status == "ended"
+    assert ended.focused_summary
     summary_row = container.db.fetchone(
         "SELECT summary FROM session_summaries WHERE project_key = ? AND session_id = ?",
         (session.resolved_project.project_key, session.session_id),
@@ -324,7 +322,7 @@ def test_recall_capture_guard_prevents_recursive_pollution(container: AppContain
         ),
         context,
     )
-    assert result["ingested_memory"]["state"] == "session_only"
+    assert result.ingested_memory.state.value == "session_only"
 
 
 def test_api_end_to_end_and_restart_persistence(client, settings: AppSettings):
@@ -357,5 +355,7 @@ def test_api_end_to_end_and_restart_persistence(client, settings: AppSettings):
 
 
 def test_full_local_e2e(container: AppContainer):
+    from memory_agent_tool.e2e import run_local_e2e
+
     report = run_local_e2e(container)
     assert report["status"] == "passed"

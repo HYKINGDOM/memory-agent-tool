@@ -34,7 +34,7 @@ class _FakeTraeAdapter:
         self.started_sessions.append(session_id)
         return SimpleNamespace(session_id=session_id)
 
-    def emit_event(self, session_id: str, event):
+    def emit_event(self, session_id: str, event, context=None):
         return {"ingested_memory": {"memory_id": 7}}
 
     def request_recall(self, query: str, context):

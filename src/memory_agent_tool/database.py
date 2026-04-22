@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import time
 import threading
@@ -379,3 +380,15 @@ class Database:
 
     def now(self) -> float:
         return time.time()
+
+    async def async_execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
+        return await asyncio.to_thread(self.execute, sql, params)
+
+    async def async_fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
+        return await asyncio.to_thread(self.fetchone, sql, params)
+
+    async def async_fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
+        return await asyncio.to_thread(self.fetchall, sql, params)
+
+    async def async_executemany(self, sql: str, seq: list[tuple[Any, ...]]) -> None:
+        return await asyncio.to_thread(self.executemany, sql, seq)

@@ -237,3 +237,51 @@ class SkillFeedbackRequest(BaseModel):
 class ProjectAliasRequest(BaseModel):
     alias_key: str
     canonical_project_key: str
+
+
+class ConflictResolutionResult(BaseModel):
+    decision: str
+    resolution: str
+
+
+class AppendEventResult(BaseModel):
+    message_id: int
+    project_key: str
+    ingested_memory: IngestedMemory | None = None
+
+
+class SkillFeedbackResult(BaseModel):
+    skill_id: int
+    feedback_positive_count: int
+    feedback_negative_count: int
+    status: str
+    accepted: bool
+
+
+class AliasSummaryResult(BaseModel):
+    alias_count: int
+    recent_aliases: list[dict[str, Any]]
+    recent_alias_usage: list[dict[str, Any]]
+
+
+class StaleReviewResult(BaseModel):
+    project_key: str
+    review_candidates: int
+    degraded: int
+
+
+class ConsolidationResult(BaseModel):
+    project_key: str
+    consolidated: int
+
+
+class RebuildResult(BaseModel):
+    project_key: str | None
+    rebuilt: int
+
+
+class ObservabilitySummaryResult(BaseModel):
+    total_skills: int
+    candidate_refresh_count: int
+    refreshed_skill_count: int
+    latest_refresh: dict[str, Any] | None = None

@@ -1,19 +1,39 @@
 # src/memory_agent_tool
 
-## Scope
+## 模块职责
 
-- 这里负责运行时、HTTP API、CLI、SQLite、MCP、真实客户端接入和状态报告。
+- `cli.py` — CLI 入口，所有子命令定义
+- `app.py` — FastAPI 应用工厂
+- `config.py` — TrustConfig / ScoringConfig / AppSettings
+- `logging.py` — 结构化日志（文本/JSON 双模式）
+- `models.py` — Pydantic 请求/响应模型
+- `database.py` — SQLite 封装（含 async 方法）
+- `scoring.py` — 可插拔召回评分器
+- `providers.py` — Provider 管理器 + 3 个内置 Provider
+- `resolver.py` — ProjectKey 解析
+- `rules.py` — AGENTS.md 规则加载与重叠检测
+- `mcp.py` — CodexMCPServer 工具调用分发
+- `mcp_server.py` — MCP stdio 协议服务
+- `gateway.py` — 客户端适配器（Copilot/Trae）
+- `copilot_acp.py` — Copilot ACP 协议处理
+- `e2e.py` — 本地 E2E 测试流程
 
-## Rules
+## services/ 包
 
-- CLI 行为改动优先落在 `cli.py`，不要把命令逻辑分散到无关模块。
-- 状态报告字段变更要同步更新 `models.py`、`services.py` 和相关测试。
-- 真实客户端链路优先复用 `gateway.py` 已验证路径，不新增第二套协议实现。
-- `Codex MCP` 的独立入口保持在 `mcp_server.py`，不要退回进程内专用实现。
-- `record_test_run()` 写回的平台结果要保持 `run_type` 稳定，避免改名造成状态报告失联。
+- `container.py` — AppContainer 依赖注入
+- `project_service.py` — 项目注册与别名
+- `conflict_service.py` — 冲突检测与反馈
+- `memory_service.py` — 记忆摄入与分类
+- `session_service.py` — 会话管理与搜索
+- `skill_service.py` — Skill 晋升与刷新
+- `maintenance_service.py` — 过期审查与合并
+- `retrieval_service.py` — 召回管线
+- `status_service.py` — 状态报告
+- `utils.py` — 共享工具函数
 
-## Do not
+## 编码规范
 
-- 不要把 `Trae chat` 描述成同步文本 API。
-- 不要绕开 `AppContainer` 直接拼装核心服务依赖。
-- 不要把长期说明写进源码注释里，改放 `docs/`。
+- 所有返回值使用 Pydantic 模型，不使用 `dict[str, Any]`。
+- 日志使用 `logging.py` 的 `get_logger(name)` 获取。
+- 信任分参数从 `TrustConfig` 读取，不硬编码。
+- 召回评分使用 `scoring.py` 的 `create_scorer(strategy)` 创建。

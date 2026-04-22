@@ -6,9 +6,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+from memory_agent_tool.config import TrustConfig
+from memory_agent_tool.logging import get_logger
+from memory_agent_tool.scoring import normalize_text as _normalize_text
 
-def _normalize_text(value: str) -> str:
-    return " ".join((value or "").strip().lower().split())
+logger = get_logger("providers")
 
 
 def _summarize_text(value: str, limit: int = 180) -> str:
@@ -118,6 +120,10 @@ class LocalBuiltinProvider(_ProviderLiteBase):
 
 
 class HolographicLikeAdapter(_ProviderLiteBase):
+    def __init__(self, trust: TrustConfig | None = None) -> None:
+        super().__init__()
+        self.trust = trust or TrustConfig()
+
     @property
     def name(self) -> str:
         return "holographic_like"
@@ -176,16 +182,16 @@ class HolographicLikeAdapter(_ProviderLiteBase):
         existing_updated_at: float,
         candidate_updated_at: float,
     ) -> str:
-        if candidate_trust >= current_trust + 0.1:
+        if candidate_trust >= current_trust + self.trust.supersede_trust_gap:
             return "supersede"
         if candidate_updated_at > existing_updated_at and candidate_trust >= current_trust:
             return "supersede"
-        if current_trust >= candidate_trust + 0.15:
+        if current_trust >= candidate_trust + self.trust.keep_existing_trust_gap:
             return "keep_existing"
         return "suspected"
 
     def adjust_trust(self, helpful: bool, current: float) -> float:
-        delta = 0.15 if helpful else -0.20
+        delta = self.trust.positive_delta if helpful else self.trust.negative_delta
         return max(0.0, min(1.0, round(current + delta, 2)))
 
     def on_session_end(self, project_key: str, session_id: str) -> dict[str, Any] | None:
@@ -315,11 +321,12 @@ class SupermemoryLikeAdapter(_ProviderLiteBase):
 
 
 class ProviderManager:
-    def __init__(self, db) -> None:
+    def __init__(self, db, trust: TrustConfig | None = None) -> None:
         self.db = db
+        self._trust = trust or TrustConfig()
         self._providers: list[ProjectMemoryProvider] = [
             LocalBuiltinProvider(),
-            HolographicLikeAdapter(),
+            HolographicLikeAdapter(trust=self._trust),
             SupermemoryLikeAdapter(),
         ]
         self._statuses: dict[str, ProviderStatus] = {}

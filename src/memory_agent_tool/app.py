@@ -45,7 +45,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         event = SessionEvent.model_validate(payload["event"])
         project = ProjectContext.model_validate(payload["project"])
         try:
-            return container.archive.append_event(session_id, event, project)
+            result = container.archive.append_event(session_id, event, project)
+            return result.model_dump()
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -103,7 +104,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
                 skill_id,
                 helpful=request.helpful,
                 accepted=request.accepted,
-            )
+            ).model_dump()
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -203,15 +204,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
 
     @app.post("/summaries/rebuild")
     def rebuild_summaries():
-        return container.maintenance.rebuild_session_summaries()
+        return container.maintenance.rebuild_session_summaries().model_dump()
 
     @app.post("/maintenance/review-stale/{project_key}")
     def review_stale(project_key: str):
-        return container.maintenance.review_stale_memories(project_key)
+        return container.maintenance.review_stale_memories(project_key).model_dump()
 
     @app.post("/maintenance/consolidate/{project_key}")
     def consolidate_project_memory(project_key: str):
-        return container.maintenance.consolidate_project_memory(project_key)
+        return container.maintenance.consolidate_project_memory(project_key).model_dump()
 
     @app.post("/doctor/check", response_model=StatusReport)
     def doctor_check() -> StatusReport:

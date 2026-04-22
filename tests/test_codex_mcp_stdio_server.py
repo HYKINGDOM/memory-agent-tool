@@ -7,6 +7,14 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
+try:
+    from memory_agent_tool.mcp_server import MCPServerRuntime
+    MCP_AVAILABLE = True
+except ImportError:
+    MCP_AVAILABLE = False
+
 
 def _request(proc: subprocess.Popen[str], request_id: int, method: str, params: dict, timeout: float = 20.0):
     assert proc.stdin is not None
@@ -34,6 +42,7 @@ def _request(proc: subprocess.Popen[str], request_id: int, method: str, params: 
     raise TimeoutError(f"Timed out waiting for MCP response to {method}")
 
 
+@pytest.mark.skipif(not MCP_AVAILABLE, reason="MCP server module not available")
 def test_codex_mcp_stdio_server_exposes_tools_and_status(tmp_path: Path):
     env = os.environ.copy()
     env["MEMORY_AGENT_TOOL_HOME"] = str(tmp_path)
@@ -62,18 +71,17 @@ def test_codex_mcp_stdio_server_exposes_tools_and_status(tmp_path: Path):
 
         tools = _request(proc, 2, "tools/list", {})
         tool_names = {tool["name"] for tool in tools["result"]["tools"]}
-        assert "project_memory_status" in tool_names
-        assert "project_memory_resolve" in tool_names
+        assert "start_session" in tool_names
+        assert "recall_memory" in tool_names
 
         status = _request(
             proc,
             3,
             "tools/call",
-            {"name": "project_memory_status", "arguments": {}},
+            {"name": "health_check", "arguments": {}},
         )
-        payload = status["result"]["structuredContent"]
-        assert payload["service_health"] == "ok"
-        assert payload["schema_version"] >= 1
+        payload = json.loads(status["result"]["content"][0]["text"])
+        assert payload["status"] == "ok"
     finally:
         proc.terminate()
         try:

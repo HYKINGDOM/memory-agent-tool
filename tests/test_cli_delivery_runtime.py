@@ -9,9 +9,10 @@ from pathlib import Path
 def _run_cli(tmp_path: Path, *args: str):
     env = dict(**__import__("os").environ)
     env["MEMORY_AGENT_TOOL_HOME"] = str(tmp_path)
+    project_root = str(Path(__file__).resolve().parents[1])
     return subprocess.run(
         [sys.executable, "-m", "memory_agent_tool.cli", *args],
-        cwd="/Users/zc/Documents/memory-agent-tool",
+        cwd=project_root,
         env=env,
         capture_output=True,
         text=True,

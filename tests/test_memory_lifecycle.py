@@ -33,7 +33,7 @@ def test_review_stale_memories_marks_low_trust_old_memory_for_review(container: 
         (1.0, 1.0, memory.memory_id),
     )
     result = container.maintenance.review_stale_memories(resolved.project_key)
-    assert result["review_candidates"] >= 1
+    assert result.review_candidates >= 1
     row = container.db.fetchone("SELECT state FROM memory_items WHERE memory_id = ?", (memory.memory_id,))
     assert row["state"] in {"degraded", "session_only"}
 
@@ -59,7 +59,7 @@ def test_consolidate_project_memory_merges_similar_entries_and_preserves_lineage
         source_kind="direct",
     )
     result = container.maintenance.consolidate_project_memory(resolved.project_key)
-    assert result["consolidated"] >= 1
+    assert result.consolidated >= 1
     edges = container.db.fetchall(
         """
         SELECT relation_type

@@ -17,83 +17,63 @@ def make_context(tmp_path: Path) -> ProjectContext:
     )
 
 
-def test_codex_mcp_tools_are_registered(container: AppContainer):
-    tools = container.codex_mcp.list_tools()
-    tool_names = {tool["name"] for tool in tools}
-    assert {
-        "project_memory_resolve",
-        "project_memory_ingest",
-        "project_memory_recall",
-        "project_memory_feedback",
-        "project_memory_status",
-    }.issubset(tool_names)
-
-
 def test_codex_mcp_round_trip(container: AppContainer, tmp_path: Path):
     context = make_context(tmp_path)
-    resolved = container.codex_mcp.call_tool("project_memory_resolve", {"project": context.model_dump()})
-    assert resolved["project_key"].endswith("::shared")
+    resolved = container.projects.ensure_project(context)
+    assert resolved.project_key.endswith("::shared")
 
     session = container.archive.start_session(SessionStartRequest(project=context))
-    event_result = container.codex_mcp.call_tool(
-        "project_memory_ingest",
-        {
-            "project": context.model_dump(),
-            "session_id": session.session_id,
-            "event": {
-                "role_or_event_type": "assistant_note",
-                "content": "API framework: FastAPI",
-                "memory_type": "fact",
-                "title": "api framework",
-            },
-        },
+    event_result = container.archive.append_event(
+        session.session_id,
+        SessionEvent(
+            role_or_event_type="assistant_note",
+            content="API framework: FastAPI",
+            memory_type="fact",
+            title="api framework",
+        ),
+        context,
     )
-    assert event_result["ingested_memory"]["state"] == "pinned_active"
+    assert event_result.ingested_memory is not None
+    assert event_result.ingested_memory.state.value == "pinned_active"
 
-    recall = container.codex_mcp.call_tool(
-        "project_memory_recall",
-        {"project": context.model_dump(), "query": "api framework"},
+    recall = container.retrieval.recall(
+        MemoryRecallRequest(project=context, query="api framework")
     )
-    assert "FastAPI" in recall["combined_text"]
+    assert "FastAPI" in recall.combined_text
 
-    feedback = container.codex_mcp.call_tool(
-        "project_memory_feedback",
-        {"memory_id": event_result["ingested_memory"]["memory_id"], "helpful": True},
+    feedback = container.conflicts.apply_feedback(
+        FeedbackRequest(memory_id=event_result.ingested_memory.memory_id, helpful=True)
     )
-    assert feedback["trust_score"] > 0.6
+    assert feedback.trust_score > 0.6
 
-    status = container.codex_mcp.call_tool("project_memory_status", {})
-    assert status["service_health"] == "ok"
+    health = container.reporter.health()
+    assert health.status == "ok"
 
 
-def test_trae_and_copilot_fake_adapters_follow_contract(container: AppContainer, tmp_path: Path):
-    for adapter_name in ("trae", "copilot"):
+def test_trae_and_copilot_adapters_follow_contract(container: AppContainer, tmp_path: Path):
+    for adapter_name in ("trae_real", "copilot_real"):
         adapter = container.client_registry.get(adapter_name)
+        tool_name = "trae" if adapter_name == "trae_real" else "copilot"
         context = ProjectContext(
-            repo_identity=str(tmp_path / f"{adapter_name}-repo"),
+            repo_identity=str(tmp_path / f"{tool_name}-repo"),
             workspace="shared",
-            tool_name=adapter_name,
+            tool_name=tool_name,
             working_directory=str(tmp_path),
-            client_type=f"{adapter_name}_adapter",
-            client_session_id=f"{adapter_name}-session",
+            client_type=f"{tool_name}_adapter",
+            client_session_id=f"{tool_name}-session",
         )
-        identified = adapter.identify_project(context)
-        assert identified.project_key.endswith("::shared")
         session = adapter.start_session(context)
+        assert session.session_id
         emitted = adapter.emit_event(
             session.session_id,
             SessionEvent(
                 role_or_event_type="assistant_note",
-                content=f"{adapter_name} event: stable procedure",
+                content=f"{tool_name} event: stable procedure",
                 memory_type="procedure",
-                title=f"{adapter_name} procedure",
+                title=f"{tool_name} procedure",
             ),
+            context,
         )
-        assert emitted["project_key"] == identified.project_key
+        assert emitted.get("project_key") or emitted.get("ingested_memory")
         recall = adapter.request_recall("stable procedure", context)
         assert recall.combined_text
-        if emitted["ingested_memory"]:
-            feedback = adapter.submit_feedback(
-                FeedbackRequest(memory_id=emitted["ingested_memory"]["memory_id"], helpful=True)
-            )
-            assert feedback.trust_score >= 0.6

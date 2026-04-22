@@ -1,19 +1,33 @@
 # tests
 
-## Scope
+## 测试结构
 
-- 这里负责平台单测、集成测试、真实客户端命令测试和回归验证。
+- `conftest.py` — 共享 fixture（container, client, settings）
+- `test_project_memory_tool.py` — 核心功能测试
+- `test_memory_lifecycle.py` — 记忆生命周期测试
+- `test_retrieval_ranking.py` — 召回排序测试
+- `test_provider_runtime.py` — Provider 运行时测试
+- `test_skill_learning_loop.py` — Skill 学习循环测试
+- `test_project_key_compatibility.py` — 项目键兼容性测试
+- `test_platform_runtime.py` — 平台运行时测试
+- `test_database_migrations.py` — 数据库迁移测试
+- `test_client_and_mcp_contracts.py` — 客户端与 MCP 契约测试
+- `test_codex_mcp_stdio_server.py` — MCP stdio 服务测试
+- `test_copilot_real_adapter.py` — Copilot 真实适配器测试（需外部 CLI）
+- `test_trae_real_adapter.py` — Trae 真实适配器测试（需外部 CLI）
+- `test_real_client_commands.py` — 真实客户端命令测试（需外部 CLI）
+- `test_client_acceptance_report.py` — 客户端验收报告测试（需外部 CLI）
+- `test_acceptance_export_and_status.py` — 验收导出与状态测试（需外部 CLI）
+- `test_provider_config_persistence.py` — Provider 配置持久化测试
+- `test_cli_delivery_runtime.py` — CLI 交付运行时测试
+- `test_trae_cli_flow.py` — Trae CLI 流程测试
 
-## Rules
+## skipif 标记
 
-- 新功能先补失败测试，再写实现。
-- 能用本地 fixture 隔离的测试，统一使用 `conftest.py` 里的 `temp_home/settings/container/client`。
-- 真实客户端测试要用 `skipif(shutil.which(...))` 控制环境依赖。
-- 改 CLI / 状态报告 / 存储字段时，优先补 `tests/test_acceptance_export_and_status.py`、`tests/test_platform_runtime.py`、`tests/test_real_client_commands.py`。
-- 真实命令测试结束后，注意避免残留外部进程影响后续回归。
+- 依赖外部 CLI（copilot/trae）的测试已加 `@pytest.mark.skipif` 标记。
+- CI 中自动跳过这些测试，本地安装对应 CLI 后可运行。
 
-## Do not
+## 运行命令
 
-- 不要把真实客户端测试写成假阳性的纯字符串断言。
-- 不要让测试依赖当前项目工作目录里的持久状态。
-- 不要在测试里静默放宽真实客户端边界定义。
+- 全量测试：`python -m pytest tests/ -q`
+- 仅核心测试（跳过外部依赖）：`python -m pytest tests/ -q -m "not skipif"`

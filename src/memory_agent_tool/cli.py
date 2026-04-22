@@ -12,6 +12,7 @@ from memory_agent_tool.config import AppSettings
 from memory_agent_tool.e2e import run_local_e2e
 from memory_agent_tool.mcp_server import MCPServerRuntime
 from memory_agent_tool.models import FeedbackRequest, MemoryRecallRequest, ProjectContext, SessionEvent
+from memory_agent_tool.client_acceptance import ClientAcceptanceTester, ReportFormatter, ReportPayloadBuilder
 from memory_agent_tool.services import AppContainer
 
 
@@ -104,19 +105,19 @@ def cmd_test_e2e_local(_: argparse.Namespace) -> int:
 
 def cmd_maintenance_review_stale(args: argparse.Namespace) -> int:
     container = _build_container()
-    print(json.dumps(container.maintenance.review_stale_memories(args.project_key), ensure_ascii=False, indent=2))
+    print(json.dumps(container.maintenance.review_stale_memories(args.project_key).model_dump(), ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_maintenance_consolidate(args: argparse.Namespace) -> int:
     container = _build_container()
-    print(json.dumps(container.maintenance.consolidate_project_memory(args.project_key), ensure_ascii=False, indent=2))
+    print(json.dumps(container.maintenance.consolidate_project_memory(args.project_key).model_dump(), ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_maintenance_rebuild(args: argparse.Namespace) -> int:
     container = _build_container()
-    print(json.dumps(container.maintenance.rebuild_session_summaries(args.project_key), ensure_ascii=False, indent=2))
+    print(json.dumps(container.maintenance.rebuild_session_summaries(args.project_key).model_dump(), ensure_ascii=False, indent=2))
     return 0
 
 
@@ -218,53 +219,15 @@ def cmd_client_trae_chat_e2e(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_client_acceptance_report(_: argparse.Namespace) -> int:
+def cmd_client_acceptance_report(args: argparse.Namespace) -> int:
     container = _build_container()
-    copilot_context = _build_client_context(container, "copilot")
-    trae_context = _build_client_context(container, "trae")
-    copilot = container.client_registry.get("copilot_real")
-    trae = container.client_registry.get("trae_real")
-
-    copilot_payload = {
-        "status": "passed",
-        "mount": copilot.mount_project_memory_server(copilot_context),
-        "handshake": copilot.handshake(copilot_context),
-    }
-    trae_payload = {
-        "chat": trae.open_chat_session(trae_context, "Use the project memory MCP server for this workspace."),
-    }
-    trae_payload["mount"] = trae_payload["chat"].get("mount", {"status": "mounted", "reused": False})
-    trae_payload["status"] = "passed" if trae_payload["chat"]["status"] == "chat_opened" else "mounted"
-    payload = {
-        "format": "json",
-        "generated_by": "memory-agent-tool",
-        "clients": {
-            "copilot": copilot_payload,
-            "trae": trae_payload,
-        },
-    }
-    output_format = getattr(_, "format", "json")
-    if output_format == "markdown":
-        markdown = "\n".join(
-            [
-                "# Real Client Acceptance Report",
-                "",
-                "## Copilot",
-                f"- Status: {copilot_payload['status']}",
-                f"- Agent: {copilot_payload['handshake']['agent_name']}",
-                f"- Session: {copilot_payload['handshake']['session_id']}",
-                "",
-                "## Trae",
-                f"- Status: {trae_payload['status']}",
-                f"- Mount: {trae_payload['mount']['status']}",
-                f"- Chat: {trae_payload['chat']['status']}",
-            ]
-        )
-        container.reporter.record_test_run("client-acceptance", "passed", payload)
-        print(markdown)
-        return 0
+    tester = ClientAcceptanceTester(container)
+    test_results = tester.run_all_tests()
+    payload = ReportPayloadBuilder.build(test_results)
     container.reporter.record_test_run("client-acceptance", "passed", payload)
-    print(json.dumps(payload, ensure_ascii=False))
+    formatter = ReportFormatter()
+    output_format = getattr(args, "format", "json")
+    print(formatter.format(payload, output_format))
     return 0
 
 
@@ -275,7 +238,7 @@ def cmd_skill_feedback(args: argparse.Namespace) -> int:
         helpful=args.helpful,
         accepted=args.accepted,
     )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result.model_dump(), ensure_ascii=False, indent=2))
     return 0
 
 

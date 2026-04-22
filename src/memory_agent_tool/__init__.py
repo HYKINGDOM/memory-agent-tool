@@ -1,5 +1,4 @@
-"""Project-scoped memory system."""
+from memory_agent_tool.config import AppSettings, TrustConfig, ScoringConfig
+from memory_agent_tool.services import AppContainer
 
-__all__ = ["__version__"]
-
-__version__ = "0.1.0"
+__all__ = ["AppSettings", "AppContainer", "TrustConfig", "ScoringConfig"]

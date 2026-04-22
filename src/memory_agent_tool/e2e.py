@@ -78,12 +78,12 @@ def run_local_e2e(container: AppContainer, workspace: Path | None = None) -> dic
         ),
         trae_context,
     )
-    container.conflicts.apply_feedback(FeedbackRequest(memory_id=codex_fact["ingested_memory"]["memory_id"], helpful=True))
-    container.conflicts.apply_feedback(FeedbackRequest(memory_id=procedure_event["ingested_memory"]["memory_id"], helpful=True))
-    container.conflicts.apply_feedback(FeedbackRequest(memory_id=procedure_event["ingested_memory"]["memory_id"], helpful=True))
+    container.conflicts.apply_feedback(FeedbackRequest(memory_id=codex_fact.ingested_memory.memory_id, helpful=True))
+    container.conflicts.apply_feedback(FeedbackRequest(memory_id=procedure_event.ingested_memory.memory_id, helpful=True))
+    container.conflicts.apply_feedback(FeedbackRequest(memory_id=procedure_event.ingested_memory.memory_id, helpful=True))
     promoted = container.skills.promote(
         codex.resolved_project.project_key,
-        procedure_event["ingested_memory"]["memory_id"],
+        procedure_event.ingested_memory.memory_id,
     )
     copilot_context = context.model_copy(update={"tool_name": "copilot"})
     recall = container.retrieval.recall(
@@ -94,9 +94,9 @@ def run_local_e2e(container: AppContainer, workspace: Path | None = None) -> dic
     )
     report = {
         "project_key_shared": codex.resolved_project.project_key == trae.resolved_project.project_key,
-        "overlap_blocked": overlap["ingested_memory"]["rule_overlap_state"] == "overlaps_agents",
-        "conflict_not_pinned": conflict_event["ingested_memory"]["state"] == "conflict_candidate",
-        "sqlite_pinned": sqlite_event["ingested_memory"]["state"] == "pinned_active",
+        "overlap_blocked": overlap.ingested_memory.rule_overlap_state == "overlaps_agents",
+        "conflict_not_pinned": conflict_event.ingested_memory.state == "conflict_candidate",
+        "sqlite_pinned": sqlite_event.ingested_memory.state == "pinned_active",
         "fastapi_present": "FastAPI" in recall.combined_text,
         "sqlite_present": "sqlite" in recall.combined_text.lower(),
         "skill_promoted": promoted.name != "",
